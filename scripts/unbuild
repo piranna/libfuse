@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 
-OBJECTS=build
+PRODUCTS=(include lib share)
 
-if [[ -d $OBJECTS ]]; then
-  chmod -R +w $OBJECTS
-fi
-
-rm -rf initramfs.cpio.gz build/ out/ || exit $?
+rm -rf deps/ build/ ${PRODUCTS[@]} prebuilds || exit $?

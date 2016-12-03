@@ -1,215 +1,116 @@
 #!/usr/bin/env bash
 
-# This script prepares a initramfs that can boot a NodeOS usersfs
-
-
 set -o pipefail
 
 
-GRN="\e[32m"
-CLR="\e[0m"
+FUSE_VERSION=`node -p "require('./package.json').version"`
+
+FUSE_URL=https://github.com/libfuse/libfuse/releases/download/fuse-$FUSE_VERSION/fuse-$FUSE_VERSION.tar.gz
 
 
 TOOLCHAIN=`node -p "require('nodeos-cross-toolchain')"`
-BAREBONES=`node -p "require('nodeos-barebones')"`
 
-NODE_DIR=`node -p "require('nodeos-nodejs')"`
-
-source $TOOLCHAIN/scripts/adjustEnvVars.sh &&
-source scripts/utils.sh                    || exit $?
+source $TOOLCHAIN/scripts/adjustEnvVars.sh || exit $?
 
 PATH=$TOOLCHAIN/bin:$PATH
 
+PRODUCTS=(include lib share)
 
-# Clean object dir and return the input error
-function err(){
-  rmStep $STEP_DIR
-  exit $1
-}
+
+case $CPU in
+  arm1176jzf-s|cortex-a7) NODE_ARCH=arm   ;;
+  cortex-a53            ) NODE_ARCH=arm64 ;;
+  i[345678]86           ) NODE_ARCH=ia32  ;;
+  x86_64|nocona         ) NODE_ARCH=x64   ;;
+
+  *)
+    echo Unknown CPU "$CPU"
+    exit 1
+  ;;
+esac
+
+OS="`uname`"
+case $OS in
+  'Linux'    ) NODE_PLATFORM=linux   ;;
+  'FreeBSD'  ) NODE_PLATFORM=freebsd ;;
+  'WindowsNT') NODE_PLATFORM=win     ;;
+  'Darwin'   ) NODE_PLATFORM=darwin  ;;
+  'SunOS'    ) NODE_PLATFORM=solaris ;;
+  'AIX'      ) NODE_PLATFORM=linux   ;;
+
+  *)
+    echo Unknown OS "$OS"
+    exit 2
+  ;;
+esac
 
 
 #
 # Define steps paths
 #
 
-OBJ_FUSE=$OBJECTS/fuse
-OBJ_INITRAMFS=$OBJECTS/initramfs
-OUT_DIR=`pwd`/out/$CPU
-
-case $PLATFORM in
-  docker|vagga)
-    OUT_DIR=$OUT_DIR.tar
-  ;;
-
-  pc_* | raspberry_*)
-    OUT_DIR=$OUT_DIR.cpio.gz
-  ;;
-
-  *)
-    echo -e "${RED}Unknown platform '$PLATFORM'${CLR}"
-    exit 1
-  ;;
-esac
+SRC_DIR=`pwd`/deps/fuse
+OBJ_DIR=`pwd`/build/$CPU
+OUT_DIR=`pwd`
+PREBUILD=prebuilds/$NODE_PLATFORM-$NODE_ARCH.tar.gz
 
 
 #
-# FUSE
+# Download QEmu
 #
 
-grep -q "CONFIG_FUSE_FS=y" $BAREBONES/build/$CPU/linux/.config
-HAS_FUSE=$?
-
-if [[ $HAS_FUSE -eq 0 || $PLATFORM == docker ]]; then
-  SRC_FUSE=`pwd`/deps/fuse
-  STEP_DIR=$OBJ_FUSE
-
-  if [[ ! -d $STEP_DIR ]]; then
-    echo -e "${WHT}Compiling FUSE${CLR}"
-
-    # Force re-creation of initramfs
-    if [[ -d $OBJ_INITRAMFS ]]; then
-      chmod -R u+w $OBJ_INITRAMFS &&
-      rmStep       $OBJ_INITRAMFS || exit 14
-    fi
-
-    (
-      mkdir -p $STEP_DIR &&
-      cd $STEP_DIR       || exit 10
-
-      # Configure
-  #    CROSS_COMPILE="$TARGET-"  \
-      MOUNT_FUSE_PATH=/bin  \
-      CC=$TARGET-gcc        \
-      CXX=$TARGET-g++       \
-      $SRC_FUSE/configure   \
-          --silent          \
-          --prefix=/        \
-          --host=$TARGET    \
-          --disable-example \
-          --disable-static  \
-          --disable-util    || exit 11
-
-      # Compile
-      $MAKE || exit 12
-
-      # Strip binary
-      $TARGET-strip lib/.libs/libfuse.so || exit 13
-    ) || err $?
-
-    echo -e "${GRN}Successfully compiled FUSE${CLR}"
-  fi
-else
-  echo -e "${WHT}FUSE is disabled${CLR}"
-fi
-
-
-#
-# System dependencies
-#
-
-STEP_DIR=$OBJ_INITRAMFS
+STEP_DIR=$SRC_DIR
 
 if [[ ! -d $STEP_DIR ]]; then
-  echo -e "${WHT}Generating initramfs${CLR}"
+  mkdir -p $STEP_DIR || exit 3
 
-  rmStep $OUT_DIR
+  rmStep $OBJ_DIR
 
-  mkdir -p $STEP_DIR || err 20
-
-  (
-    #case $PLATFORM in
-    #  qemu)
-    #    gunzip -c $BAREBONES/barebones.cpio.gz |
-    #    (
-    #      cd "$STEP_DIR";
-    #      cpio -i -d -H newc --no-absolute-filenames
-    #    ) || exit 21
-    #  ;;
-    #esac
-
-    #
-    # Install FUSE
-    #
-
-    if [ $HAS_FUSE -eq 0 ]; then
-      mkdir -p $STEP_DIR/lib                              &&
-      cp -d $OBJ_FUSE/lib/.libs/libfuse.so* $STEP_DIR/lib || exit 22
-
-      eval "$NPMi" -g exclfs                       \
-          --fuse__include_dirs=$SRC_FUSE/include   \
-          --fuse__library_dirs=$OBJ_FUSE/lib/.libs \
-          --fuse__libraries=-lfuse                 || exit 23
-    fi
-
-    #
-    # Install system dependencies
-    #
-
-    PACKAGES=`node -p "require('./package.json').nodeosDependencies.join(' ')"`
-    eval "$NPMi" -g $PACKAGES || exit 24
-
-    mkdir -p $STEP_DIR/sbin                                    &&
-    ln -fs ../bin/nodeos-boot-multiUser $STEP_DIR/sbin/init || exit 27
-
-
-    #
-    # /usr/bin/env
-    #
-
-    mkdir -p             $STEP_DIR/usr/bin     &&
-    ln -fs ../../bin/env $STEP_DIR/usr/bin/env || exit 28
-  ) || err $?
-
-  echo -e "${GRN}Successfully generated initramfs${CLR}"
+  curl -L $FUSE_URL | tar -xz --strip-components=1 -C $STEP_DIR || err 4
 fi
 
 
 #
-# Wrap the system up and pack it
+# Build FUSE
 #
 
-STEP_DIR=$OUT_DIR
+STEP_DIR=$OBJ_DIR
 
-# Set initramfs files only accesible to root
-chmod -R u-w,go-rw "$OBJ_INITRAMFS"                            &&
-chmod -R o+r       "$OBJ_INITRAMFS/lib/node_modules/usrbinenv" &&
-chmod -R o+r       "$OBJ_INITRAMFS/usr/bin/env"                || exit 30
+if [[ ! -d $STEP_DIR ]]; then
+  rmStep $PREBUILD ${PRODUCTS[@]}
 
-case $PLATFORM in
-  docker|vagga)
-    if [[ ! -f $STEP_DIR ]]; then
-      mkdir -p `dirname $STEP_DIR`
+  (
+    mkdir -p $STEP_DIR &&
+    cd $STEP_DIR       || exit 10
 
-      (
-        cd "$OBJ_INITRAMFS";
-        tar --owner 0 --group 0 -H pax -c * || exit 40
-      ) > $STEP_DIR || err $?
-    fi
+    # Configure
+#    CROSS_COMPILE="$TARGET-"  \
+    MOUNT_FUSE_PATH=/bin  \
+    CC=$TARGET-gcc        \
+    CXX=$TARGET-g++       \
+    $SRC_DIR/configure    \
+        --silent          \
+        --prefix=$OUT_DIR \
+        --host=$TARGET    \
+        --disable-example \
+        --disable-static  \
+        --disable-util    || exit 11
 
-    ln -sf $CPU.tar out/latest || err 41
+    # Compile
+    make -j$JOBS &&
+    make install || exit 12
 
-    # Needed by vagga
-    cp $BAREBONES/out/latest out/barebones.tar || err 42
-  ;;
-
-  pc_* | raspberry_*)
-    if [[ ! -f $STEP_DIR ]]; then
-      mkdir -p `dirname $STEP_DIR`
-
-      (
-        cd "$OBJ_INITRAMFS";
-        find | cpio --owner 0:0 -o -H newc | gzip || exit 50
-      ) > $STEP_DIR || err $?
-    fi
-
-    ln -sf $CPU.cpio.gz out/latest || err 51
-  ;;
-
-  *)
-    echo -e "${RED}Unknown platform '$PLATFORM'${CLR}"
-    exit 60
-  ;;
-esac
+    # Strip binary
+    $TARGET-strip lib/.libs/libfuse.so || exit 13
+  ) || err $?
+fi
 
 
-echo -e "${GRN}Successfully built 'initramfs'${CLR}"
+#
+# Pack libfuse in a `node-gyp` compatible way
+#
+
+STEP_DIR=$PREBUILD
+
+mkdir -p prebuilds                          &&
+tar -cf - ${PRODUCTS[@]} | gzip > $PREBUILD || err 20
