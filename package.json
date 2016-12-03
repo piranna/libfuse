@@ -3,6 +3,7 @@
   "version": "2.9.7",
   "description": "libfuse as a npm package",
   "scripts": {
+    "BigRedButton": "scripts/BigRedButton",
     "build": "scripts/build",
     "unbuild": "scripts/unbuild"
   },
@@ -18,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/piranna/libfuse/issues"
   },
-  "homepage": "https://github.com/piranna/libfuse#readme"
+  "homepage": "https://github.com/piranna/libfuse#readme",
+  "devDependencies": {
+    "prebuild": "^4.5.0"
+  }
 }

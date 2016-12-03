@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+
+#
+# Generate prebuilds
+#
+
+BITS=32        npm run build || exit 1
+BITS=64        npm run build || exit 2
+MACHINE=raspi2 npm run build || exit 3
+
+
+#
+# Upload release to GitHub
+#
+
+if [ "$GITHUB_TOKEN" ]; then
+  prebuild --upload-all $GITHUB_TOKEN || exit 10
+fi

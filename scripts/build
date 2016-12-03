@@ -17,6 +17,13 @@ PATH=$TOOLCHAIN/bin:$PATH
 PRODUCTS=(include lib share)
 
 
+# Build cross-compiler (if needed)
+(
+  cd $TOOLCHAIN
+  BITS=$BITS CPU=$CPU MACHINE=$MACHINE npm install --production || exit $?
+) || exit $?
+
+
 case $CPU in
   arm1176jzf-s|cortex-a7) NODE_ARCH=arm   ;;
   cortex-a53            ) NODE_ARCH=arm64 ;;
