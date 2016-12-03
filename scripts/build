@@ -14,8 +14,6 @@ source $TOOLCHAIN/scripts/adjustEnvVars.sh || exit $?
 
 PATH=$TOOLCHAIN/bin:$PATH
 
-PRODUCTS=(include lib share)
-
 
 # Build cross-compiler (if needed)
 (
@@ -58,7 +56,7 @@ esac
 
 SRC_DIR=`pwd`/deps/fuse
 OBJ_DIR=`pwd`/build/$CPU
-OUT_DIR=`pwd`
+OUT_DIR=`pwd`/out/$CPU
 PREBUILD=prebuilds/$NODE_PLATFORM-$NODE_ARCH.tar.gz
 
 
@@ -69,11 +67,11 @@ PREBUILD=prebuilds/$NODE_PLATFORM-$NODE_ARCH.tar.gz
 STEP_DIR=$SRC_DIR
 
 if [[ ! -d $STEP_DIR ]]; then
-  mkdir -p $STEP_DIR || exit 3
+  mkdir -p $STEP_DIR || exit 10
 
   rmStep $OBJ_DIR
 
-  curl -L $FUSE_URL | tar -xz --strip-components=1 -C $STEP_DIR || err 4
+  curl -L $FUSE_URL | tar -xz --strip-components=1 -C $STEP_DIR || err 11
 fi
 
 
@@ -84,11 +82,11 @@ fi
 STEP_DIR=$OBJ_DIR
 
 if [[ ! -d $STEP_DIR ]]; then
-  rmStep $PREBUILD ${PRODUCTS[@]}
+  rmStep $OUT_DIR $PREBUILD
 
   (
     mkdir -p $STEP_DIR &&
-    cd $STEP_DIR       || exit 10
+    cd $STEP_DIR       || exit 20
 
     # Configure
 #    CROSS_COMPILE="$TARGET-"  \
@@ -101,14 +99,17 @@ if [[ ! -d $STEP_DIR ]]; then
         --host=$TARGET    \
         --disable-example \
         --disable-static  \
-        --disable-util    || exit 11
+        --disable-util    || exit 21
 
     # Compile
     make -j$JOBS &&
-    make install || exit 12
+    make install || exit 22
 
-    # Strip binary
-    $TARGET-strip lib/.libs/libfuse.so || exit 13
+    # Strip libraries
+    $TARGET-strip $OUT_DIR/lib/*
+
+    # Remove `share` folder
+    rm -rf $OUT_DIR/share
   ) || err $?
 fi
 
@@ -119,5 +120,5 @@ fi
 
 STEP_DIR=$PREBUILD
 
-mkdir -p prebuilds                          &&
-tar -cf - ${PRODUCTS[@]} | gzip > $PREBUILD || err 20
+mkdir -p prebuilds                    &&
+tar -cf - $OUT_DIR | gzip > $PREBUILD || err 30
