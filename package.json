@@ -1,6 +1,6 @@
 {
   "name": "libfuse",
-  "version": "2.9.7",
+  "version": "2.9.8-0",
   "description": "libfuse as a npm package",
   "scripts": {
     "BigRedButton": "scripts/BigRedButton",
@@ -28,7 +28,7 @@
     "buho": "^0.2.1",
     "ci-publish": "^1.3.0",
     "nodeos-cross-toolchain": "^1.0.0-RC3",
-    "prebuild": "^4.5.0"
+    "prebuild": "^5.1.2"
   },
   "buho": {
     "type": "Github",
