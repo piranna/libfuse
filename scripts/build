@@ -57,7 +57,7 @@ esac
 SRC_DIR=`pwd`/deps/fuse
 OBJ_DIR=`pwd`/build/$CPU
 OUT_DIR=`pwd`/out/$CPU
-PREBUILD=prebuilds/$NODE_PLATFORM-$NODE_ARCH.tar.gz
+PREBUILD=`pwd`/prebuilds/$NODE_PLATFORM-$NODE_ARCH.tar.gz
 
 
 #
@@ -121,4 +121,4 @@ fi
 STEP_DIR=$PREBUILD
 
 mkdir -p prebuilds                    &&
-tar -cf - $OUT_DIR | gzip > $PREBUILD || err 30
+tar -cf - out/$CPU | gzip > $STEP_DIR || err 31

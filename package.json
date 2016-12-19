@@ -14,7 +14,7 @@
   "author": "Jesús Leganés Combarro 'piranna' <piranna@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "prebuild-install": "^1.1.0"
+    "prebuild-install": "piranna/prebuild-install#patch-1"
   },
   "repository": {
     "type": "git",
