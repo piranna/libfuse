@@ -1,6 +1,6 @@
 {
   "name": "libfuse",
-  "version": "2.9.8-0",
+  "version": "2.9.8-1",
   "description": "libfuse as a npm package",
   "scripts": {
     "BigRedButton": "scripts/BigRedButton",
